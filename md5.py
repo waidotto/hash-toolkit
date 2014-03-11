@@ -1,10 +1,12 @@
 #!/usr/bin/env python2
+import argparse
+import sys
 import struct
 
 def leftrotate(x, c):
 	return ((x << c) | (x >> (32 - c))) & 0xffffffff
 
-def digest(message, prev = '0123456789abcdeffedcba9876543210'):
+def digest(message, length = -1, prev = '0123456789abcdeffedcba9876543210', blocks = 0):
 	s = [
 	7, 12, 17, 22,  7, 12, 17, 22,  7, 12, 17, 22,  7, 12, 17, 22,
 	5,  9, 14, 20,  5,  9, 14, 20,  5,  9, 14, 20,  5,  9, 14, 20,
@@ -29,6 +31,9 @@ def digest(message, prev = '0123456789abcdeffedcba9876543210'):
 	0x6fa87e4f, 0xfe2ce6e0, 0xa3014314, 0x4e0811a1,
 	0xf7537e82, 0xbd3af235, 0x2ad7d2bb, 0xeb86d391]
 
+	if len(prev) != 32:
+		sys.stderr.write('error: length of --prev must be 32 chars.\n')
+		exit(1)
 	#a0 = 0x67452301
 	#b0 = 0xefcdab89
 	#c0 = 0x98badcfe
@@ -37,13 +42,28 @@ def digest(message, prev = '0123456789abcdeffedcba9876543210'):
 	b0 = struct.unpack('>I', struct.pack('<I', int(prev[8:16], 16)))[0]
 	c0 = struct.unpack('>I', struct.pack('<I', int(prev[16:24], 16)))[0]
 	d0 = struct.unpack('>I', struct.pack('<I', int(prev[24:32], 16)))[0]
+	print hex(a0)
+	print hex(b0)
+	print hex(c0)
+	print hex(d0)
 
-	length = len(message) * 8
-	message += '\x80'
-
+	if length == -1:
+		length = len(message) * 8
+	if len(message) < (length - 1) / 8 + 1:
+		sys.stderr.write('error: Message is too short(--length is too long).\n')
+		exit(1)
+	if len(message) > (length - 1) / 8 + 1:
+		sys.stderr.write('error: Message is too long(--length is too short).\n')
+		exit(1)
+	if length % 8 == 0:
+		message += '\x80'
+	else:
+		message = message[:-1] + chr((ord(message[-1]) | (1 << (7 - (length % 8)))) & (0xff << (7 - (length % 8))))
 	while len(message) % 64 != 56:
 		message += '\x00'
+	length += blocks * 512
 	message += struct.pack('<Q', length)
+
 	for k in range(len(message) / 64):
 		M = []
 		for j in range(16):
@@ -74,8 +94,20 @@ def digest(message, prev = '0123456789abcdeffedcba9876543210'):
 		b0 = (b0 + B) & 0xffffffff
 		c0 = (c0 + C) & 0xffffffff
 		d0 = (d0 + D) & 0xffffffff
-	return ''.join([hex(ord(x))[2:] for x in (struct.pack('<I', a0) + struct.pack('<I', b0) + struct.pack('<I', c0) + struct.pack('<I', d0))])
+	return ''.join(['%02x' % ord(x) for x in (struct.pack('<I', a0) + struct.pack('<I', b0) + struct.pack('<I', c0) + struct.pack('<I', d0))])
 
 if __name__ == '__main__':
-	print digest('foo')
+	parser = argparse.ArgumentParser(description = 'Toolkit to calclate bitwise-hash and exploit the hash length extension attack')
+	parser.add_argument('--length', '-l', help = 'bitwise message length')
+	parser.add_argument('--prev', '-p', help = 'result of previous block process')
+	parser.add_argument('--blocks', '-b', help = 'number of already processed blocks')
+	parser.add_argument('message', help = 'message to calculate hash')
+	args = parser.parse_args()
+	c = vars(args).copy()
+	for k, v in c.items():
+		if v == None or k == 'message':
+			del c[k]
+		elif k == 'length' or k == 'blocks':
+			c[k] = int(c[k], 0)
+	print digest(args.message, **c)
 
