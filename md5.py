@@ -6,7 +6,7 @@ import struct
 def leftrotate(x, c):
 	return ((x << c) | (x >> (32 - c))) & 0xffffffff
 
-def digest(message, length = -1, prev = '0123456789abcdeffedcba9876543210', blocks = 0):
+def digest(message, length = -1, prev = '0123456789abcdeffedcba9876543210', blocks = 0, verbose = False):
 	s = [
 	7, 12, 17, 22,  7, 12, 17, 22,  7, 12, 17, 22,  7, 12, 17, 22,
 	5,  9, 14, 20,  5,  9, 14, 20,  5,  9, 14, 20,  5,  9, 14, 20,
@@ -42,10 +42,11 @@ def digest(message, length = -1, prev = '0123456789abcdeffedcba9876543210', bloc
 	b0 = struct.unpack('>I', struct.pack('<I', int(prev[8:16], 16)))[0]
 	c0 = struct.unpack('>I', struct.pack('<I', int(prev[16:24], 16)))[0]
 	d0 = struct.unpack('>I', struct.pack('<I', int(prev[24:32], 16)))[0]
-	print hex(a0)
-	print hex(b0)
-	print hex(c0)
-	print hex(d0)
+	if verbose:
+		print 'a0 = ' + hex(a0)
+		print 'b0 = ' + hex(b0)
+		print 'c0 = ' + hex(c0)
+		print 'd0 = ' + hex(d0)
 
 	if length == -1:
 		length = len(message) * 8
@@ -63,6 +64,14 @@ def digest(message, length = -1, prev = '0123456789abcdeffedcba9876543210', bloc
 		message += '\x00'
 	length += blocks * 512
 	message += struct.pack('<Q', length)
+
+	if verbose:
+		print 'padded message:'
+		for i in range(len(message) / 16):
+			sys.stdout.write('\t')
+			for j in range(len(message[i * 16:i * 16 + 16])):
+				sys.stdout.write('%02x ' % ord(message[i * 16 + j]))
+			sys.stdout.write('\n')
 
 	for k in range(len(message) / 64):
 		M = []
@@ -101,6 +110,7 @@ if __name__ == '__main__':
 	parser.add_argument('--length', '-l', help = 'bitwise message length')
 	parser.add_argument('--prev', '-p', help = 'result of previous block process')
 	parser.add_argument('--blocks', '-b', help = 'number of already processed blocks')
+	parser.add_argument('--verbose', '-v', action='store_true', help = 'show detailed information')
 	parser.add_argument('message', help = 'message to calculate hash')
 	args = parser.parse_args()
 	c = vars(args).copy()
